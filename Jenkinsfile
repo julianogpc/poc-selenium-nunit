@@ -5,6 +5,7 @@ pipeline {
 
     environment {
         DOCKER_HOST = "tcp://192.168.0.131:2375"
+        TRX_FILE = "TestResults.trx"
         JENKINS_CONTAINER_NAME = sh (
             script: 'DOCKER_HOST=tcp://192.168.0.131:2375 docker ps --filter=name=jenkins --format="{{.Names}}" | tail -1',
             returnStdout: true
@@ -34,7 +35,6 @@ pipeline {
             steps {
                 sh '''
                     dotnet build
-                    chown -R 1000:1000 .
                 '''
             }
         }
@@ -52,28 +52,24 @@ pipeline {
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                     sh '''
-                        dotnet test --logger=trx
-                        sleep 10
-                        chown -R 1000:1000 .
+                        dotnet test --logger="trx;LogFileName=${TRX_FILE}"
                     '''
                 }
+                sh '''
+                    chown -R 1000:1000 .
+                '''
             }
         }
         stage('Publish') { 
             steps {
-                mstest failOnError: false
                 allure includeProperties: false, jdk: '', results: [[path: 'Selenium.Tests/bin/Debug/netcoreapp3.0/allure-results']]
+                mstest failOnError: false, testResultsFile: '**/TestResults.trx'
             }
         }
     }
     
     post {
         always {
-            catchError(buildResult: 'SUCCESS') {
-                sh '''
-                    echo 'SUCESS!'
-                '''
-            }
             cleanWs()
         }
     }
